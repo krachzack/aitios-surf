@@ -1,0 +1,14 @@
+[package]
+name = "aitios-surf"
+version = "0.1.0"
+authors = ["krachzack <hello@phstadler.com>"]
+
+[dependencies]
+aitios-geom = { git = "https://github.com/krachzack/aitios-geom.git" }
+aitios-scene = { git = "https://github.com/krachzack/aitios-scene.git" }
+aitios-sampling = { git = "https://github.com/krachzack/aitios-sampling.git" }
+nearest_kdtree = { path = "nearest_kdtree" }
+rand = "0.4"
+
+[dev-dependencies]
+aitios-asset = { git = "https://github.com/krachzack/aitios-asset.git" }
