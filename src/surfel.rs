@@ -1,6 +1,6 @@
-use geom::{Position, Vec3};
+use geom::{Position, Normal, Texcoords, Vec2, Vec3};
 
-pub struct Surfel<V : Position, D> {
+pub struct Surfel<V, D> {
     /// An interpolated vertex at the surfel position
     vertex: V,
     /// Additional associated data of the surfel
@@ -28,5 +28,17 @@ impl<V : Position, D> Surfel<V, D> {
 impl<V : Position, D> Position for Surfel<V, D> {
     fn position(&self) -> Vec3 {
         self.vertex.position()
+    }
+}
+
+impl<V : Normal, D> Normal for Surfel<V, D> {
+    fn normal(&self) -> Vec3 {
+        self.vertex.normal()
+    }
+}
+
+impl<V : Texcoords, D> Texcoords for Surfel<V, D> {
+    fn texcoords(&self) -> Vec2 {
+        self.vertex.texcoords()
     }
 }
