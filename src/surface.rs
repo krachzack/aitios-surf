@@ -1,6 +1,6 @@
 use std::io;
 use std::slice;
-use geom::{Position, Vector3};
+use geom::{Position, Normal, Vec3, InnerSpace};
 use nearest_kdtree::KdTree;
 use nearest_kdtree::distance::squared_euclidean;
 
@@ -51,7 +51,7 @@ impl<S : Position> Surface<S> {
 
     /// Returns a mutable reference to the point nearest to the given
     /// location.
-    pub fn nearest_mut<'a>(&'a mut self, from: Vector3<f32>) -> &'a mut S {
+    pub fn nearest_mut<'a>(&'a mut self, from: Vec3) -> &'a mut S {
         assert!(!self.samples.is_empty());
 
         let x = from.x as f64;
@@ -62,7 +62,7 @@ impl<S : Position> Surface<S> {
         &mut self.samples[nearest_idx]
     }
 
-    pub fn nearest<'a>(&'a self, from: Vector3<f32>) -> &'a S {
+    pub fn nearest<'a>(&'a self, from: Vec3) -> &'a S {
         assert!(!self.samples.is_empty());
 
         let x = from.x as f64;
@@ -73,7 +73,7 @@ impl<S : Position> Surface<S> {
         &self.samples[nearest_idx]
     }
 
-    pub fn nearest_idx<'a>(&'a self, from: Vector3<f32>) -> usize {
+    pub fn nearest_idx<'a>(&'a self, from: Vec3) -> usize {
         assert!(!self.samples.is_empty());
 
         let x = from.x as f64;
@@ -87,7 +87,7 @@ impl<S : Position> Surface<S> {
     /// Returns the `count` points in the surface which are nearest to the location
     /// specified with `from` as pairs containing the squared distance of the surfel to
     /// `from` as the first datum and a reference to the surfel as the second.
-    pub fn nearest_n<'a>(&'a self, from: Vector3<f32>, count: usize) -> Vec<(f32, &'a S)> {
+    pub fn nearest_n<'a>(&'a self, from: Vec3, count: usize) -> Vec<(f32, &'a S)> {
         assert!(self.samples.len() >= count);
 
         let x = from.x as f64;
@@ -101,7 +101,7 @@ impl<S : Position> Surface<S> {
             .collect()
     }
 
-    pub fn nearest_n_indexes<'a>(&'a self, from: Vector3<f32>, count: usize) -> Vec<(f32, usize)> {
+    pub fn nearest_n_indexes<'a>(&'a self, from: Vec3, count: usize) -> Vec<(f32, usize)> {
         assert!(self.samples.len() >= count);
 
         let x = from.x as f64;
@@ -114,11 +114,37 @@ impl<S : Position> Surface<S> {
             .collect()
     }
 
+    /// Queries the n nearest surfels from the given point with the given normal. Surfels
+    /// where the normal is rotated by more than the given cosine of an angle with respect
+    /// to the search normal are filtered out. This ensures surfels from the other side of
+    /// a thin layer will not influence the surfels on the other side.
+    ///
+    /// E.g. a `angle_threshold_cos` of cos(PI/2) = 0.0 will only allow rotations of up to 90°,
+    /// while cos(PI/4) = 0.7071067812 will only allow 45°.
+    pub fn nearest_n_indexes_oriented<'a>(&'a self, from: Vec3, normal: Vec3, angle_threshold_cos: f32, count: usize) -> Vec<(f32, usize)>
+        where S : Normal
+    {
+        assert!(self.samples.len() >= count);
+
+        let x = from.x as f64;
+        let y = from.y as f64;
+        let z = from.z as f64;
+
+        self.spatial_idx.iter_nearest(&[x, y, z], &squared_euclidean).unwrap()
+            .filter(|n| {
+                let surfel_normal = self.samples[*n.1].normal();
+                surfel_normal.dot(normal) > angle_threshold_cos
+            })
+            .map(|n| (n.0 as f32, *n.1))
+            .take(count)
+            .collect()
+    }
+
     pub fn iter<'a>(&'a self) -> slice::Iter<'a, S> {
         self.samples.iter()
     }
 
-    pub fn find_within_sphere<'a>(&'a self, center: Vector3<f32>, radius: f32) -> Vec<&'a S> {
+    pub fn find_within_sphere<'a>(&'a self, center: Vec3, radius: f32) -> Vec<&'a S> {
         let radius_sqr = (radius * radius) as f64;
 
         self.spatial_idx.within(
@@ -132,7 +158,7 @@ impl<S : Position> Surface<S> {
         self.samples.iter_mut()
     }
 
-    pub fn find_within_sphere_indexes(&self, center: Vector3<f32>, radius: f32) -> Vec<usize> {
+    pub fn find_within_sphere_indexes(&self, center: Vec3, radius: f32) -> Vec<usize> {
         let radius_sqr = (radius * radius) as f64;
 
         self.spatial_idx.within(
@@ -143,3 +169,81 @@ impl<S : Position> Surface<S> {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+    use SurfaceBuilder;
+    use SurfelSampling;
+    use geom::{TupleTriangle, Vertex, FromVertices, Vec2};
+
+    #[test]
+    fn test_nearest_oriented() {
+        let triangles = unit_quad();
+
+        let surf = SurfaceBuilder::new()
+            .sampling(SurfelSampling::MinimumDistance(0.05))
+            .sample_triangles(triangles.into_iter(), &())
+            .build();
+
+        assert!(surf.samples.len() > 50, "Expected at least 50 samples on a square with side length 1 and minimum sample distance of 0.05, but found {}", surf.samples.len());
+
+        let nearest_same_normal = surf.nearest_n_indexes_oriented(
+            Vec3::new(0.5, 0.5, 0.0),
+            Vec3::new(0.0, 0.0, 1.0),
+            0.0,
+            50
+        );
+        assert_eq!(nearest_same_normal.len(), 50, "Searching for surfels with same normal at center of quad, but did not find as many as expected");
+
+        let nearest_orthogonal_normal = surf.nearest_n_indexes_oriented(
+            Vec3::new(0.5, 0.5, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+            0.0,
+            50
+        );
+        assert_eq!(nearest_orthogonal_normal.len(), 0, "Searched for surfels with 90° rotated normal and expected to find nothing, but did find something");
+
+        let nearest_flipped_normal = surf.nearest_n_indexes_oriented(
+            Vec3::new(0.5, 0.5, 0.0),
+            Vec3::new(0.0, 0.0, -1.0),
+            0.0,
+            50
+        );
+        assert_eq!(nearest_flipped_normal.len(), 0, "Searched for surfels with 180° rotated normal and expected to find nothing, but did find something");
+    }
+
+    /// Makes a quad with one vertex at the origin (0.0, 0.0, 0.0), and one at (1.0, 1.0, 0.0).
+    fn unit_quad() -> Vec<TupleTriangle<Vertex>> {
+        let normal = Vec3::new(0.0, 0.0, 1.0);
+
+        let vtx_bottom_left = Vertex {
+            position: Vec3::new(0.0, 0.0, 0.0),
+            texcoords: Vec2::new(0.0, 0.0),
+            normal
+        };
+        let vtx_bottom_right = Vertex {
+            position: Vec3::new(1.0, 0.0, 0.0),
+            texcoords: Vec2::new(1.0, 0.0),
+            normal
+        };
+        let vtx_top_right = Vertex {
+            position: Vec3::new(1.0, 1.0, 0.0),
+            texcoords: Vec2::new(1.0, 1.0),
+            normal
+        };
+        let vtx_top_left = Vertex {
+            position: Vec3::new(0.0, 1.0, 0.0),
+            texcoords: Vec2::new(0.0, 1.0),
+            normal
+        };
+
+        vec![
+            TupleTriangle::new(
+                vtx_bottom_left.clone(), vtx_bottom_right, vtx_top_right.clone()
+            ),
+            TupleTriangle::new(
+                vtx_top_right, vtx_top_left, vtx_bottom_left
+            ),
+        ]
+    }
+}
