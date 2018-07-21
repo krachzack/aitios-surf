@@ -4,8 +4,8 @@
 //! functionality to sample points on triangle meshes.
 
 extern crate aitios_geom as geom;
-extern crate aitios_scene as scene;
 extern crate aitios_sampling as sampling;
+extern crate aitios_scene as scene;
 extern crate nearest_kdtree;
 
 mod builder;

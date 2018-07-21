@@ -1,14 +1,14 @@
 use super::*;
 
-use geom::{Position};
 use geom::prelude::*;
+use geom::Position;
 use nearest_kdtree::KdTree;
 use sampling::into_poisson_disk_set;
 use surfel::Surfel;
 
-pub struct SurfaceBuilder<S : Position> {
+pub struct SurfaceBuilder<S: Position> {
     samples: Vec<S>,
-    sampling: SurfelSampling
+    sampling: SurfelSampling,
 }
 
 #[derive(Copy, Clone)]
@@ -23,11 +23,10 @@ pub enum SurfelSampling {
     /// on surfaces as proposed for David Cline et. al. to generate a poisson disk set with given minimum distance
     /// for points in the resulting set.
     /// The strategy is slower than `PerSqrUnit`, but surfels are more evenly spaced.
-    MinimumDistance(f32)
+    MinimumDistance(f32),
 }
 
-impl<V : Position, D> SurfaceBuilder<Surfel<V, D>> {
-
+impl<V: Position, D> SurfaceBuilder<Surfel<V, D>> {
     /// Sets the surface sampling strategy for converting meshes to surfels.
     /// Defaults to `SurfelSampling::MinimumDistance(0.1)` if never called.
     pub fn sampling(mut self, sampling: SurfelSampling) -> Self {
@@ -36,26 +35,27 @@ impl<V : Position, D> SurfaceBuilder<Surfel<V, D>> {
     }
 
     pub fn sample_triangles<I, T>(mut self, triangles: I, prototype_surfel_data: &D) -> Self
-        where T : Clone + InterpolateVertex<Vertex = V> + FromVertices<Vertex = V>,
-            V : Clone,
-            I : IntoIterator<Item = T>,
-            D : Clone
+    where
+        T: Clone + InterpolateVertex<Vertex = V> + FromVertices<Vertex = V>,
+        V: Clone,
+        I: IntoIterator<Item = T>,
+        D: Clone,
     {
         self.samples.extend(match self.sampling {
             SurfelSampling::MinimumDistance(min_dist) => into_poisson_disk_set(triangles, min_dist)
                 .map(|v| Surfel::new(v, prototype_surfel_data.clone())),
-            _ => unimplemented!("Only SurfelSampling::MinimumDistance implemented at the moment")
+            _ => unimplemented!("Only SurfelSampling::MinimumDistance implemented at the moment"),
         });
 
         self
     }
 }
 
-impl<S : Position> SurfaceBuilder<S> {
+impl<S: Position> SurfaceBuilder<S> {
     pub fn new() -> Self {
         SurfaceBuilder {
             samples: Vec::new(),
-            sampling: SurfelSampling::MinimumDistance(0.1)
+            sampling: SurfelSampling::MinimumDistance(0.1),
         }
     }
 
@@ -110,8 +110,8 @@ impl<S : Position> SurfaceBuilder<S> {
     /// ```
     pub fn add_samples<I>(mut self, samples: I) -> Self
     where
-        I : IntoIterator<Item = S> {
-
+        I: IntoIterator<Item = S>,
+    {
         self.samples.extend(samples.into_iter());
         self
     }
@@ -121,17 +121,18 @@ impl<S : Position> SurfaceBuilder<S> {
         let spatial_idx = {
             let mut tree = KdTree::new(3);
 
-            self.samples.iter()
+            self.samples
+                .iter()
                 .map(S::position)
                 .enumerate()
-                .for_each(|(idx, s)| tree.add(
-                    [s.x as f64, s.y as f64, s.z as f64],
-                    idx
-                ).unwrap());
+                .for_each(|(idx, s)| tree.add([s.x as f64, s.y as f64, s.z as f64], idx).unwrap());
 
             tree
         };
 
-        Surface { samples: self.samples, spatial_idx }
+        Surface {
+            samples: self.samples,
+            spatial_idx,
+        }
     }
 }

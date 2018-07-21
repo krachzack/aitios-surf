@@ -1,25 +1,23 @@
-extern crate aitios_surf as surf;
 extern crate aitios_asset as asset;
 extern crate aitios_scene as scene;
+extern crate aitios_surf as surf;
 
-use surf::{SurfaceBuilder, SurfelSampling};
 use asset::obj;
 use scene::Mesh;
-use std::path::PathBuf;
 use std::fs::File;
+use std::path::PathBuf;
+use surf::{SurfaceBuilder, SurfelSampling};
 
 #[derive(Clone)]
 struct SurfelData {
-    prop: i32
+    prop: i32,
 }
 
 #[test]
 fn test_torus() {
-    let torus = obj::load("tests/torus.obj")
-        .expect("Could not load test geometry");
+    let torus = obj::load("tests/torus.obj").expect("Could not load test geometry");
 
-    let torus_triangles = torus.iter()
-        .flat_map(|e| e.mesh.triangles());
+    let torus_triangles = torus.iter().flat_map(|e| e.mesh.triangles());
 
     let prototype_surfel_data = SurfelData { prop: -1 };
 
@@ -35,10 +33,8 @@ fn test_torus() {
     let target_path = PathBuf::from("tests/torus_surfels.obj");
 
     // Create the file
-    let sink = &mut File::create(&target_path)
-        .unwrap();
+    let sink = &mut File::create(&target_path).unwrap();
 
     // And finally dump the geometry to the OBJ at "circle_vertices.obj"
-    surface.dump(sink)
-        .unwrap();
+    surface.dump(sink).unwrap();
 }
