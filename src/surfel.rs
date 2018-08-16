@@ -7,7 +7,7 @@ pub struct Surfel<V, D> {
     data: D,
 }
 
-impl<V: Position, D> Surfel<V, D> {
+impl<V, D> Surfel<V, D> {
     pub fn new(vertex: V, data: D) -> Self {
         Surfel { vertex, data }
     }
